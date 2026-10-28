@@ -1,35 +1,12 @@
-# Secrets and local environment
-.env
-.env.*
-!.env.example
 .venv/
-venv/
-
-# Python
 __pycache__/
-*.py[cod]
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
 *.egg-info/
-dist/
-build/
-
-# Local databases / raw or licensed data
-*.duckdb
-*.duckdb.wal
+.env*
+!.env.example
+data/
+raw/
+backups/
+logs/
+*.duckdb*
 *.db
-*.sqlite
-*.sqlite3
-data/raw/
-data/private/
-data/exports/
-models/
-artifacts/
-.cache/
-
-# IDE / OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
