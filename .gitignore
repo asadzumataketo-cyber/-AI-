@@ -33,3 +33,9 @@ artifacts/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Weekend local runtime
+data/
+raw/
+backups/
+logs/
