@@ -11,7 +11,7 @@ def ready_store(tmp_path):
     meta=dict(source='https://www.jra.go.jp/keiba/card.pdf',source_sha256='a'*64,
               available_at=(t-timedelta(hours=1)).isoformat(),retrieved_at=(t-timedelta(minutes=50)).isoformat(),updated_at=now(),availability_evidence='test fixture; no real race or performance claim')
     rid='202605041011';race=dict(meta,race_id=rid,name='検証用',venue='東京',surface='ダート',distance=1600,
-                              start_at=(t+timedelta(days=2)).isoformat(),declared_entries=3,confirmed=True,target_key='test-target')
+                              start_at=(t+timedelta(minutes=90)).isoformat(),declared_entries=3,confirmed=True,target_key='test-target')
     entries=[];past=[]
     for n in range(1,4):
         hid='202010000'+str(n)
@@ -37,6 +37,14 @@ def test_ready_live_e2e_and_cached_lock(ready_store):
     cached=guarded_predict(s,race['race_id'],now(),99)
     assert cached['cached'] and cached['seed']==42
     assert digest(s.load('predictions',snapshot['id']))==original
+
+
+@pytest.mark.parametrize('minutes',[30,180])
+def test_new_live_freeze_rejects_outside_window(ready_store,minutes):
+    s,race,_,_=ready_store
+    append_version(s,'races',race,start_at=(datetime.now(timezone.utc)+timedelta(minutes=minutes)).isoformat())
+    with pytest.raises(ValueError,match='1〜2時間'):guarded_predict(s,race['race_id'],now())
+    assert s.db.execute('SELECT count(*) FROM predictions').fetchone()[0]==0
 
 
 @pytest.mark.parametrize('change',[{'confirmed':False},{'source':'https://example.com/card'},{'source_sha256':''}])

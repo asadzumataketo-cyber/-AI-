@@ -86,6 +86,7 @@ def test_result_job_validates_before_import_and_uses_packaged_baseline(tmp_path,
         def now(cls,tz=None):return datetime(2026,10,31,8,0,tzinfo=timezone.utc)
     monkeypatch.setattr(jobs,'datetime',Clock)
     monkeypatch.setattr(jobs,'W',tmp_path)
+    monkeypatch.setattr(jobs,'build_report',lambda key:0)  # PDF integration is tested separately.
     monkeypatch.setattr(jobs,'LOCK',tmp_path/'writer.lock')
     monkeypatch.setattr(jobs,'RACES',{'race':dict(cname='pw01dde0105202604101120261031/C6',start_at='2026-10-31T06:30:00+00:00')})
     (tmp_path/'outputs').mkdir()

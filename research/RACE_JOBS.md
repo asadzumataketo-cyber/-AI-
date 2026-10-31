@@ -4,7 +4,15 @@
 
 `python -m jra_engine.race_jobs result TARGET --workdir PRIVATE_WORK --data-dir PRIVATE_DB`
 
+`python -m jra_engine.race_jobs report TARGET --workdir PRIVATE_WORK --data-dir PRIVATE_DB`
+
+`python -m jra_engine.race_jobs odds TARGET --workdir PRIVATE_WORK --data-dir PRIVATE_DB`
+
 The private work folder contains `races.json` with target_key, cname and timezone-aware start_at. HTML captures, results and logs remain under that folder and are not committed. `JRA_JOB_WORKDIR` and `JRA_DATA_DIR` can supply the paths. The scheduler is preview-only by default; `python -m jra_engine.race_scheduler apply` registers tasks only when the operator explicitly invokes it. Keep the PC running. Existing operator task registrations are not modified by this PR.
+
+Future new freezes are accepted only 1-2 hours before start; scheduled attempts are T-120/T-90/T-60. Already-frozen forecasts remain no-ops regardless of age. T-30 observes singles odds only within a +/-5 minute window, with the actual completed retrieval time, source URL, SHA-256 and horse identity/status checks. It writes an immutable `outputs/odds-TARGET-t30.json` separate from the forecast and DB. Missing odds stay missing; a missed window is logged, never backdated or replaced with final odds. This is not yet an automatic importer of ticket odds for article EV.
+
+After comparison the result job resumes the daily PDF step. `report TARGET` retries PDF generation without refetching/reimporting results. Human `reports/DATE/notes.json` is preserved; absent notes receive a deterministic summary of completed races only. The report validates the frozen prediction hash, stored comparison and recalculated frozen-odds baselines using a read-only DB. Headless Edge (or `JRA_PDF_BROWSER`) renders the reused slide layout with a private browser profile. Generated PDFs live in `reports/DATE/generated/INPUT_HASH/` with a hash manifest, so manual slides and older versions remain untouched. A PDF failure leaves the completed result JSON available for retry. Matching inputs and PDF hashes reuse the output. Windows/Edge and actual task registration still require operator verification; a successful synthetic test does not prove a scheduled real observation.
 
 The shared lock is `PRIVATE_DB/claude-jobs.lock`. All operators must acquire the same exclusive lock before writing. An old lock is never automatically deleted: inspect the owner/process and resolve it explicitly. DuckDB's own file locking is an additional protection. Result URLs, dates, venue/meeting/day/race number and every horse ID/number are checked before writing any result. Unsupported or missing results fail closed. A 403 is reported after one attempt without bypass or retry.
 

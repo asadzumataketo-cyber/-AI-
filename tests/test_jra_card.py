@@ -126,7 +126,8 @@ def test_schedule_works_back_from_post_time():
     races = [dict(target_key='k', start_at='2026-10-31T15:30:00+09:00')]
     jobs = scheduler.plan(races, datetime(2026, 10, 31, 1, 0, tzinfo=timezone.utc))  # 10:00 JST
     times = [(j['cmd'], j['at'].strftime('%H:%M')) for j in jobs]
-    assert ('lock', '09:30') not in times and ('lock', '11:30') in times and ('lock', '14:30') in times
+    assert {t for cmd,t in times if cmd=='lock'} == {'13:30','14:00','14:30'}
+    assert ('odds','15:00') in times
     assert ('result', '16:00') in times and ('result', '19:30') in times
 
 

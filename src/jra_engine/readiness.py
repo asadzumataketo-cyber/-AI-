@@ -1,6 +1,7 @@
 """Read-only race preparation checks and a guard around the unchanged model."""
 import json
 import re
+from datetime import datetime
 from collections import Counter
 from urllib.parse import urlparse
 from .store import now, stamp
@@ -118,6 +119,10 @@ def guarded_predict(store,race_id,as_of,seed=42,mode='live'):
         if saved:return _queue_notice(store,{**saved,'cached':True})
         gate=audit_live_race(store,race_id,as_of)
         if not gate['ready']:raise ValueError('発走前固定の準備未完了：'+' / '.join(gate['errors']))
+        race=store.records('races',as_of,[race_id])[0]
+        start=datetime.fromisoformat(race['start_at'])
+        if any(not 3600 <= (start-datetime.fromisoformat(stamp(t))).total_seconds() <= 7200 for t in (now(),as_of)):
+            raise ValueError('新規固定は発走1〜2時間前のみ。既存固定は上書きしません')
     return _queue_notice(store,engine_predict(store,race_id,as_of,seed,mode))
 
 

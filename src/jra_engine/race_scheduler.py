@@ -2,7 +2,6 @@
 
 python scheduler.py          show the plan only
 python scheduler.py apply    register (replaces tasks of the same name) under \\JRA-AI\\
-python scheduler.py remove   delete every task under \\JRA-AI\\
 Tasks run jobs.py with the PC on (or wake it from sleep); a PC that is shut down misses them.
 """
 import json, subprocess, sys, os
@@ -11,8 +10,8 @@ from pathlib import Path
 
 W = Path(os.environ.get('JRA_JOB_WORKDIR', Path(__file__).resolve().parents[2] / 'data' / 'race-jobs'))
 PY = Path(sys.executable)
-# Lock early enough for Actions-style delays and a missed run; each job is a no-op once done.
-LOCK_BEFORE = [timedelta(hours=h) for h in (6, 4, 3, 2, 1)]
+# Future new forecasts only: existing freezes are never replaced.
+LOCK_BEFORE = [timedelta(minutes=m) for m in (120, 90, 60)]
 RESULT_AFTER = [timedelta(minutes=m) for m in (30, 60, 120, 240)]
 
 
@@ -20,7 +19,7 @@ def plan(races, at):
     jobs = []
     for r in races:
         start = datetime.fromisoformat(r['start_at'])
-        for cmd, times in (('lock', [start - d for d in LOCK_BEFORE]), ('result', [start + d for d in RESULT_AFTER])):
+        for cmd, times in (('lock', [start - d for d in LOCK_BEFORE]), ('odds', [start-timedelta(minutes=30)]), ('result', [start + d for d in RESULT_AFTER])):
             for t in times:
                 if t > at:
                     jobs.append(dict(name=f"{r['target_key']}-{cmd}-{t:%H%M}", cmd=cmd, key=r['target_key'], at=t))
@@ -29,13 +28,15 @@ def plan(races, at):
 
 def register(job):
     import re
-    if job['cmd'] not in ('lock','result') or not re.fullmatch(r'[A-Za-z0-9-]+', job['key']) or not re.fullmatch(r'[A-Za-z0-9-]+', job['name']):
+    if job['cmd'] not in ('lock','result','odds') or not re.fullmatch(r'[A-Za-z0-9-]+', job['key']) or not re.fullmatch(r'[A-Za-z0-9-]+', job['name']):
         raise ValueError('Invalid scheduled job')
     at = job['at'].astimezone(timezone(timedelta(hours=9))).strftime('%Y-%m-%dT%H:%M:%S')
     def quote(s):return str(s).replace("'", "''")
     db = Path(os.environ.get('JRA_DATA_DIR', Path(__file__).resolve().parents[2] / 'data' / 'real'))
     arguments = f'-m jra_engine.race_jobs {job["cmd"]} {job["key"]} --workdir "{W}" --data-dir "{db}"'
-    ps = (f"$a=New-ScheduledTaskAction -Execute '{quote(PY)}' -Argument '{quote(arguments)}' -WorkingDirectory '{quote(W)}';"
+    ps = ("$svc=New-Object -ComObject Schedule.Service;$svc.Connect();"
+          "try{$null=$svc.GetFolder('\\JRA-AI')}catch{$null=$svc.GetFolder('\\').CreateFolder('JRA-AI')};"
+          f"$a=New-ScheduledTaskAction -Execute '{quote(PY)}' -Argument '{quote(arguments)}' -WorkingDirectory '{quote(W)}';"
           f"$t=New-ScheduledTaskTrigger -Once -At ([datetimeoffset]'{at}+09:00').LocalDateTime;"
           "$s=New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Minutes 20);"
           f"Register-ScheduledTask -TaskPath '\\JRA-AI\\' -TaskName '{job['name']}' -Action $a -Trigger $t -Settings $s -Force | Out-Null")
