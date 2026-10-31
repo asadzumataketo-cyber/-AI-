@@ -83,7 +83,7 @@ def parse_card(raw, url):
             frame=int(_first(r'alt="枠(\d)', tr)), number=int(re.match(r'\d+', number)[0]), horse_id=hid,
             name=_text(_first(r'accessU\.html\?CNAME=pw01dud00\d{10}/[^"]*">(.*?)</a>', tr, '')),
             sex_age=_text(_first(r'<p class="age">(.*?)</p>', jockey_cell, '')) or None,
-            carried_weight=float(_first(r'([\d.]+)\s*(?:<span>)?kg', jockey_cell)),
+            carried_weight=float(_first(r'([\d.]+)\s*(?:<span>)?kg', _first(r'<p class="weight">(.*?)</p>', jockey_cell, ''))),
             jockey=_text(_first(r'<p class="jockey">(.*?)</p>', jockey_cell, '')),
             odds=float(_first(r'<span class="num"><strong[^>]*>([\d.]+)</strong>', tr)) if _first(r'<span class="num"><strong[^>]*>([\d.]+)</strong>', tr) else None,
             status=status, past=[p for p in map(_past, re.findall(r'<td class="past[^>]*>(.*?)</td>', tr, re.S)) if p]))

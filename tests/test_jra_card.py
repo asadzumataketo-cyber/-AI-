@@ -35,6 +35,11 @@ def test_parse_card():
     assert p['race_id'] == '202605040105' and p['finish'] == 2 and p['field_size'] == 16 and p['going'] == '良'
     assert p['race_date'] == '2026-09-01' and p['surface'] == 'ダート' and p['distance'] == 1600
 
+
+def test_carried_weight_ignores_inline_image_base64():
+    raw=GOOD.replace(b'<td class="jockey">',b'<td class="jockey"><img src="data:image/png;base64,4kgAAAA">')
+    assert jc.parse_card(raw,URL)['entries'][0]['carried_weight']==56.
+
 def test_name_after_icon_and_red_odds():
     r = row(1, 1, '2022100001', '馬A', past('2026年9月1日', '東京', 'pw01sde1005202604010520260901', 'OP', '2', '16', '3', '1600ダ', '良'))
     r = r.replace('<div class="name"><a', '<div class="name"><span class="horse_icon"><img alt="マルガイ"></span><a')
