@@ -115,7 +115,17 @@ def preparation_status(store,as_of=None):
 def guarded_predict(store,race_id,as_of,seed=42,mode='live'):
     if mode=='live' and store.folder.name!='demo':
         saved=store.load('predictions',race_id+':live')
-        if saved:return {**saved,'cached':True}
+        if saved:return _queue_notice(store,{**saved,'cached':True})
         gate=audit_live_race(store,race_id,as_of)
         if not gate['ready']:raise ValueError('発走前固定の準備未完了：'+' / '.join(gate['errors']))
-    return engine_predict(store,race_id,as_of,seed,mode)
+    return _queue_notice(store,engine_predict(store,race_id,as_of,seed,mode))
+
+
+def _queue_notice(store,prediction):
+    if prediction['mode']=='live' and store.folder.name!='demo':
+        try:
+            from .prediction_notifications import enqueue
+            enqueue(prediction,store.folder/'prediction-outbox')
+        except (OSError,ValueError) as e:
+            return {**prediction,'notification_warning':str(e)}
+    return prediction
