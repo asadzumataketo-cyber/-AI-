@@ -33,3 +33,6 @@ artifacts/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Generated CI feedback (published only as Actions artifacts)
+outputs/
