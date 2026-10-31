@@ -128,3 +128,15 @@ def test_schedule_works_back_from_post_time():
     times = [(j['cmd'], j['at'].strftime('%H:%M')) for j in jobs]
     assert ('lock', '09:30') not in times and ('lock', '11:30') in times and ('lock', '14:30') in times
     assert ('result', '16:00') in times and ('result', '19:30') in times
+
+
+@pytest.mark.parametrize('prefix', ['01', '10'])
+def test_result_link_current_and_history_formats_match_full_identity(prefix):
+    # The live Oct 31 card uses sde01; past-performance links use sde10.
+    expected = f'pw01sde{prefix}05202604101120261031/82'
+    raw = (f'<a href="/JRADB/accessS.html?CNAME=pw01sde1005202604101020261031/11">other race</a>'
+           f'<a href="/JRADB/accessS.html?CNAME=pw01sde0105202604101120261030/82">wrong date</a>'
+           f'<a href="/JRADB/accessS.html?CNAME={expected}">result</a>').encode()
+    assert jc.result_link(raw, '202605041011', '2026-10-31') == expected
+    assert jc.result_link(raw, '202608041011', '2026-10-31') is None
+    assert jc.result_link(raw, '202605041011', '2026-10-29') is None

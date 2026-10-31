@@ -10,7 +10,8 @@ RID = '202605041011'
 URL = 'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1005202604101120261031/AB'
 
 def result_html(date='2026年10月31日', venue='東京', race=11):
-    return (f'<div class="cell date">{date} 4回{venue}10日</div><img alt="{race}レース">'
+    return (f'<div class="cell date">{date} 4回{venue}10日</div>'
+            f'<img src="/JRADB/img/race_number_main/race_num_{race}.png" alt="{race}レース">'
             '<tr><td class="place">1</td><td class="num">1</td>'
             '<a href="?CNAME=pw01dud102022100001/AA">馬</a></tr>').encode('cp932')
 
@@ -24,6 +25,16 @@ def test_exact_result_identity_is_checked():
     for entries in [[dict(horse_id='2022100001',number=2)],
                     [dict(horse_id='2022100002',number=1)],[]]:
         with pytest.raises(ValueError):jc.validate_result_entries(rows,entries)
+
+
+def test_result_number_uses_main_heading_not_navigation():
+    nav = '<nav><img alt="1レース"><img alt="11レース"></nav>'.encode('cp932')
+    assert jc.parse_result(nav + result_html(), RID, URL)[0]['finish'] == 1
+    with pytest.raises(ValueError):
+        jc.parse_result(nav + result_html(race=12), RID, URL)
+    without_main = result_html().replace(b'race_number_main/race_num_11.png', b'other.png')
+    with pytest.raises(ValueError):
+        jc.parse_result(nav + without_main, RID, URL)
 
 def test_no_winner_is_rejected():
     with pytest.raises(ValueError):

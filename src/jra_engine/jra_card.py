@@ -174,9 +174,10 @@ RESULT_STATUS = {'取消': 'scratched', '除外': 'excluded', '中止': 'dnf', '
 def result_link(card_raw, race_id, race_date):
     """Find this race's official result page on its own card page (the check code cannot be computed)."""
     html = card_raw.decode('cp932', 'ignore')
-    want = f"pw01sde10{race_id[4:6]}{race_id[:4]}{race_id[6:]}{race_date.replace('-', '')}/"
-    m = re.search(r'(pw01sde10\d{20}/[0-9A-F]{2})', html[html.find(want) - 10:] if want in html else '')
-    return m.group(1) if m and m.group(1).startswith(want) else None
+    for cname in re.findall(r'pw01sde(?:01|10)\d{20}/[0-9A-F]{2}', html):
+        if race_id_from_cname(cname) == (race_id, race_date):
+            return cname
+    return None
 
 
 def parse_result(raw, race_id, source_url=None):
@@ -188,8 +189,8 @@ def parse_result(raw, race_id, source_url=None):
     if source_url is not None:
         actual_id, actual_date = race_id_from_cname(source_url)
         shown_date = f'{m[1]}-{int(m[2]):02}-{int(m[3]):02}'
-        shown_number = _first(r'alt="(\d+)レース"', html)
-        if actual_id != race_id or actual_date != shown_date or shown_number != str(int(race_id[10:12])):
+        shown_numbers = re.findall(r'race_number_main/race_num_(\d+)\.png', html)
+        if actual_id != race_id or actual_date != shown_date or shown_numbers != [str(int(race_id[10:12]))]:
             raise ValueError('結果URL・日付・レース番号が一致しません')
     rows = []
     for place, num, hid in re.findall(r'<tr>\s*<td class="place">(.*?)</td>.*?<td class="num">(.*?)</td>.*?pw01dud[01]0(\d{10})', html, re.S):
