@@ -79,6 +79,7 @@ def load(notes, workdir=None, database=None):
 def chart(races):
     """Grouped horizontal bars of Log Loss (lower is better); values labeled on every bar (contrast relief)."""
     rows = [(r['short'], k, label, color, (r['report']['baselines'] or {}).get(k) or {}) for r in races for k, label, color in SERIES]
+    unavailable = {r['short'] for r in races if r['report']['baselines'] is None}
     top = max([float(v.get('log_loss') or 0) for *_, v in rows]+[1.]) * 1.15
     x0, width, bar, gap, group = 190, 820, 26, 2, 34
     y, out = 10, []
@@ -92,7 +93,8 @@ def chart(races):
             out.append(f'<rect x="{x0}" y="{y}" width="{w:.1f}" height="{bar}" rx="4" fill="{color}"><title>{e(label)} {v["log_loss"]:.2f}</title></rect>')
             out.append(f'<text x="{x0 + w + 10:.1f}" y="{y + 19}" font-size="18" fill="#0b0b0b">{v["log_loss"]:.2f}</text>')
         else:
-            out.append(f'<text x="{x0}" y="{y + 19}" font-size="18" fill="#52514e">{e(label)}：オッズ欠損のため比較なし</text>')
+            reason = '固定後の取消等により比較なし' if race in unavailable else '比較値なし'
+            out.append(f'<text x="{x0}" y="{y + 19}" font-size="18" fill="#52514e">{e(label)}：{reason}</text>')
         y += bar + gap + 6
     out.append(f'<line x1="{x0}" y1="0" x2="{x0}" y2="{y}" stroke="#a8a7a2" stroke-width="1"/>')
     legend = ''.join(f'<span><i style="background:{c}"></i>{e(l)}</span>' for _, l, c in SERIES)

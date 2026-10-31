@@ -5,6 +5,8 @@ from pathlib import Path
 from .store import digest
 from . import report_slides
 
+VERSION = 'race-report-1.0.0'
+
 
 def make_notes(races, reports, date):
     complete = [r for r in races if r['target_key'] in reports]
@@ -39,7 +41,7 @@ def ensure(workdir, database, race, configured_races):
     if any(r['target_key'] not in reports for r in notes['races']):
         return dict(status='pending',reason='Operator notes include a race not compared yet')
     verified = report_slides.load(notes,workdir,database)
-    fingerprint = digest([notes,[(r['report'],digest(r['prediction'])) for r in verified]])
+    fingerprint = digest([VERSION,notes,[(r['report'],digest(r['prediction'])) for r in verified]])
     # Keep manual slides.pdf and older generated versions untouched.
     target = folder/'generated'/fingerprint
     manifest = target/'report.json'

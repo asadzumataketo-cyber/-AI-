@@ -66,6 +66,11 @@ def test_modified_comparison_or_market_baseline_rejected(reporting,which):
     with pytest.raises(ValueError):rr.ensure(work,db,race,[race])
 
 
+def test_withdrawal_chart_does_not_claim_missing_market_odds():
+    body=slides.chart([dict(short='Synthetic',report=dict(baselines=None))])
+    assert '固定後の取消等' in body and 'オッズ欠損' not in body
+
+
 def test_human_notes_not_overwritten_when_second_race_pending(reporting):
     work,db,race,out=reporting;notes=rr.make_notes([race],{race['target_key']:json.loads(out.read_text())},'2026-10-31')
     notes.pop('generated_by');notes['races'].append(dict(target_key='2026-10-31-kyoto-11'))
