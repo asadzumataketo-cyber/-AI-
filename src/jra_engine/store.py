@@ -10,7 +10,8 @@ import duckdb
 
 TABLES = {'horses':'horse_id','races':'race_id','race_entries':'entry_id',
  'race_results':'entry_id','horse_performances':'entry_id','track_conditions':'race_id',
- 'odds_snapshots':'entry_id','paddock_evaluations':'entry_id'}
+ 'odds_snapshots':'entry_id','paddock_evaluations':'entry_id',
+ 'race_registrations':'fact_id','observed_performances':'fact_id','race_targets':'target_key'}
 def now(): return datetime.now(timezone.utc).isoformat()
 def stamp(value):
     t=datetime.fromisoformat(value.replace('Z','+00:00'))
@@ -52,7 +53,8 @@ class Store:
                         if not r.get(field): raise ValueError(f'{table}: {field} が必要です')
                     if expected=='real':
                         if 'race_id' in r and not re.fullmatch(r'\d{12}',str(r['race_id'])):raise ValueError('JRA race_id は公式12桁IDです')
-                        if 'horse_id' in r and not re.fullmatch(r'\d{10}',str(r['horse_id'])):raise ValueError('horse_id は公式10桁IDです')
+                        unresolved=table in ['race_registrations','observed_performances'] and r.get('horse_id') is None
+                        if 'horse_id' in r and not unresolved and not re.fullmatch(r'\d{10}',str(r['horse_id'])):raise ValueError('horse_id は公式10桁IDです')
                     if table in ['race_entries','race_results','horse_performances','paddock_evaluations','odds_snapshots']:
                         for field in ['race_id','horse_id']:
                             if not r.get(field):raise ValueError(field+' が必要です')

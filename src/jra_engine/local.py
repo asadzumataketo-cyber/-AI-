@@ -7,7 +7,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
 from .store import Store,now,stamp
-from .pipeline import predict,compare
+from .pipeline import compare
+from .readiness import guarded_predict as predict, preparation_status, audit_live_race
 
 ROOT=Path(__file__).resolve().parents[2]
 def demo_bundle():
@@ -32,6 +33,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             url=urlparse(self.path);q=parse_qs(url.query);s=self.server.store
             if url.path=='/api/races':return self.reply(s.records('races',now()))
+            if url.path=='/api/readiness':return self.reply(audit_live_race(s,q['race_id'][0],q.get('as_of',[None])[0]) if q.get('race_id') else preparation_status(s))
+            if url.path=='/api/preparation':return self.reply(dict(targets=s.records('race_targets',now()),registrations=s.records('race_registrations',now()),history=s.records('observed_performances',now())))
             if url.path=='/api/snapshot':return self.reply(s.load('predictions',q['id'][0]))
             if url.path=='/api/compare':return self.reply(compare(s,q['id'][0]))
             if url.path=='/api/health':return self.reply(dict(ok=True,dataset=s.folder.name,model='jra-weekend-1.0.0-baseline'))
@@ -56,6 +59,7 @@ def main():
     sub.add_parser('init');sub.add_parser('demo');imp=sub.add_parser('import');imp.add_argument('file');imp.add_argument('--table')
     pr=sub.add_parser('predict');pr.add_argument('race_id');pr.add_argument('--as-of',default=None);pr.add_argument('--mode',choices=['live','retrospective'],default='live');pr.add_argument('--seed',type=int,default=42)
     co=sub.add_parser('compare');co.add_argument('prediction_id');sv=sub.add_parser('serve');sv.add_argument('--port',type=int,default=4180)
+    ready=sub.add_parser('readiness');ready.add_argument('race_id',nargs='?');ready.add_argument('--as-of')
     args=parser.parse_args();folder=Path(args.data_dir)/args.dataset;folder.mkdir(parents=True,exist_ok=True)
     logging.basicConfig(filename=folder/'errors.log',level=logging.WARNING)
     s=Store(folder)
@@ -76,6 +80,7 @@ def main():
             print(json.dumps(dict(inserted=s.import_bundle(bundle))))
         elif args.command=='predict':print(json.dumps(predict(s,args.race_id,args.as_of or now(),args.seed,args.mode),ensure_ascii=False))
         elif args.command=='compare':print(json.dumps(compare(s,args.prediction_id),ensure_ascii=False))
+        elif args.command=='readiness':print(json.dumps(audit_live_race(s,args.race_id,args.as_of) if args.race_id else preparation_status(s,args.as_of),ensure_ascii=False))
         elif args.command=='serve':
             server=HTTPServer(('127.0.0.1',args.port),Handler);server.store=s
             print(f'Local: http://127.0.0.1:{args.port} dataset={args.dataset}',flush=True);server.serve_forever()
