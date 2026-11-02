@@ -12,6 +12,7 @@ JRA中央競馬およびNAR地方競馬（当面はサラブレッド平地競�
 |---|---|---|---|
 | 10万回モンテカルロ（10,000×10バッチ、seed固定） | **main に実装済み** | `src/jra_engine/simulation.py` | pytest 3件成功 |
 | モデル／一様M0／オッズ基準の Log Loss・Brier 比較（#6） | **main に実装済み** | `src/jra_engine/baseline.py` | pytest 6件成功。オッズ欠損時は補完せず比較を出さない |
+| 保存済み予測の採点：モデル／全馬同確率／オッズの比較、時期分割、校正表、合格判定（#6） | **main に実装済み** | `src/jra_engine/backtest.py` | pytest 17件。実データ判定は件数不足で未判定 |
 | DuckDB追記型ストア・as_of以前だけ読む仕組み（#2・#3） | 未マージ（PR #13 Draft） | `feature/weekend-local-e2e` の `store.py` | pytest 15件を独立に再実行し成功 |
 | 発走前スナップショット固定・全頭の結果照合（#12） | 未マージ（PR #13 Draft） | 同 `pipeline.py` | 同上。実レースの本番固定は未確認 |
 | 2時間ごとのCI（#15） | 未マージ（PR #16） | `feature/issue-15-pytest-feedback` | PR上のCI成功の記録のみ。mainでの定期実行は未実施 |
