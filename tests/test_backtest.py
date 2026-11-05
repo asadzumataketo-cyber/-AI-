@@ -1,6 +1,7 @@
 import math
 import pytest
-from jra_engine.backtest import evaluate, score_race, tau_b, load_races
+import duckdb
+from jra_engine.backtest import evaluate, score_race, tau_b, load_races, _verdict
 
 
 def race(rid='202605010101', start='2026-01-05T05:00:00+00:00', as_of='2026-01-05T03:00:00+00:00', grade='A', odds=(2., 4., 8., 16.), finish=(1, 2, 3, 4), status=None):
@@ -49,17 +50,30 @@ def test_duplicate_race_rejected():
         evaluate([race(), race()])
 
 
+@pytest.mark.parametrize('evidence', [None, {}, {'verified': True},
+    {'input_hash': 'a' * 64, 'timestamp_url': 'https://example.invalid/proof', 'verified': True}])
+def test_unverified_a_never_enters_formal_validation(evidence):
+    r = race()
+    r['evidence'] = evidence
+    out = evaluate([r], validation_from='2026-01-01', min_validation_races=1, min_validation_days=1)
+    assert out['races_scored'] == 1
+    assert out['races'][0]['grade'] == 'U'
+    assert out['races'][0]['grade_reason'] == 'independent_prestart_attestation_not_verified'
+    assert 'all/A' not in out['groups'] and out['groups']['all/U']['races'] == 1
+    assert out['verdict']['races'] == 0 and out['verdict']['status'] == 'insufficient_races'
+
+
 def test_split_is_by_time_and_grades_are_separate():
     out = evaluate([race(rid='1'), race(rid='2', start='2026-02-05T05:00:00+00:00', as_of='2026-02-05T03:00:00+00:00'),
                     race(rid='3', start='2026-02-06T05:00:00+00:00', as_of='2026-02-06T03:00:00+00:00', grade='C')], validation_from='2026-02-01')
-    assert out['groups']['development/A']['races'] == 1
-    assert out['groups']['validation/A']['races'] == 1
+    assert out['groups']['development/U']['races'] == 1
+    assert out['groups']['validation/U']['races'] == 1
     assert out['groups']['validation/C']['races'] == 1
 
 
 def test_verdict_needs_enough_races_on_grade_a_validation():
     out = evaluate([race()], validation_from='2026-01-01', min_validation_races=2)
-    assert out['verdict']['status'] == 'insufficient_races' and out['verdict']['races'] == 1
+    assert out['verdict']['status'] == 'insufficient_races' and out['verdict']['races'] == 0
 
 
 def test_verdict_pass_and_fail():
@@ -70,27 +84,29 @@ def test_verdict_pass_and_fail():
     for r in good:
         for h, w, o in zip(r['horses'], (.9, .05, .03, .02), (2., 3., 4., 5.)):
             h['win'], h['odds'] = w, o
-    assert evaluate(good, validation_from='2026-01-01', min_validation_races=20)['verdict']['status'] == 'passed'
-    assert evaluate(good, validation_from='2026-01-01', min_validation_races=20, min_validation_days=21)['verdict']['status'] == 'insufficient_races'
+    # Test the statistical helper separately; synthetic/local A labels cannot certify evidence.
+    scored = lambda rs: [dict(score_race(r), day=r['start_at'][:10]) for r in rs]
+    assert _verdict(scored(good), 20, 10)['status'] == 'passed'
+    assert _verdict(scored(good), 20, 21)['status'] == 'insufficient_races'
+    assert evaluate(good, validation_from='2026-01-01', min_validation_races=20)['verdict']['status'] == 'insufficient_races'
     bad = many((4, 3, 2, 1))
-    assert evaluate(bad, validation_from='2026-01-01', min_validation_races=20)['verdict']['status'] == 'failed'
+    assert _verdict(scored(bad), 20, 10)['status'] == 'failed'
 
 
 def test_calibration_counts_every_horse_once():
     out = evaluate([race()])
-    bins = out['groups']['all/A']['calibration']['top3']
+    bins = out['groups']['all/U']['calibration']['top3']
     assert sum(b['n'] for b in bins) == 4
 
 
 def test_favourite_and_longshot_subgroups():
     upset = race(rid='2', start='2026-01-06T05:00:00+00:00', as_of='2026-01-06T03:00:00+00:00', odds=(2., 4., 8., 30.), finish=(4, 1, 2, 3))
-    group = evaluate([race(), upset])['groups']['all/A']
+    group = evaluate([race(), upset])['groups']['all/U']
     assert group['favourite_missed_top3']['races'] == 1
     assert group['longshot_in_top3']['races'] == 1
 
 
 def test_load_races_prefers_live_excludes_exploration_and_reads_results(tmp_path):
-    duckdb = pytest.importorskip('duckdb')
     path = tmp_path / 'r.duckdb'
     db = duckdb.connect(str(path))
     db.execute('CREATE TABLE predictions(id VARCHAR, created_at VARCHAR, payload VARCHAR, hash VARCHAR)')
@@ -110,18 +126,23 @@ def test_load_races_prefers_live_excludes_exploration_and_reads_results(tmp_path
     result('2', finish=1, status='finished', final=False)      # provisional
     result('3', at='2026-01-05T04:00:00+00:00', finish=1, status='finished', final=True)  # published before the start
     db.close()
+    import hashlib
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
     races = {r['race_id']: r for r in load_races(path)}
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
     assert set(races) == {'R', 'M'}
-    assert races['R']['grade'] == 'A' and races['R']['finish']['0'] == 1
+    assert races['R']['grade'] == 'U' and races['R']['finish']['0'] == 1
     assert races['R']['finish'] == {'0': 1, '1': None} and races['R']['status']['1'] == 'disqualified'
     assert races['M']['grade'] == 'C' and races['M']['prediction_id'] == 'M:replay:new'
+    report = evaluate(list(races.values()), validation_from='2026-01-01', min_validation_races=1, min_validation_days=1)
+    assert 'all/A' not in report['groups'] and report['verdict']['races'] == 0
 
 
 def test_calibration_bins_every_probability_including_float_edges():
     r = race()
     for h, p in zip(r['horses'], (.6, .3, 1., .7)):
         h['top3'] = p
-    bins = evaluate([r])['groups']['all/A']['calibration']['top3']
+    bins = evaluate([r])['groups']['all/U']['calibration']['top3']
     assert [b['range'] for b in bins] == ['0.3-0.4', '0.6-0.7', '0.7-0.8', '0.9-1.0'] and sum(b['n'] for b in bins) == 4
 
 

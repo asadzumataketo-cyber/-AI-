@@ -1,7 +1,9 @@
 """Score already-saved forecasts against official results: model vs all-horses-equal vs odds-only (Issue #6).
 
 Never predicts, fetches or writes to a database. A race enters only if its forecast predates the start and
-every runner has a result. Grade A = locked live before the start; C = reconstructed. They are never mixed.
+every runner has a result. C = reconstructed; U = live but independently unverified.
+Local mode/timestamps/hashes cannot certify A. No attestation verifier is implemented yet,
+so this entry point never admits A to the formal validation verdict.
 """
 import argparse
 import json
@@ -140,7 +142,13 @@ def evaluate(races, validation_from=None, min_validation_races=50, min_validatio
         reason = _skip_reason(race)
         if reason:
             skipped.append(dict(race_id=race['race_id'], reason=reason)); continue
-        rows.append(dict(score_race(race), race_id=race['race_id'], grade=race['grade'], day=race['start_at'][:10], prediction_id=race.get('prediction_id')))
+        # Do not trust caller-supplied A labels (including direct evaluate() callers).
+        # Independent timestamp evidence must bind both the forecast and its input SHA;
+        # a local label, URL, hash or self-declared verification flag is not that proof.
+        grade = 'C' if race['grade'] == 'C' else 'U'
+        rows.append(dict(score_race(race), race_id=race['race_id'], grade=grade,
+                         grade_reason='reconstruction' if grade == 'C' else 'independent_prestart_attestation_not_verified',
+                         day=race['start_at'][:10], prediction_id=race.get('prediction_id')))
     groups = {}
     for grade in sorted({r['grade'] for r in rows}):
         graded = [r for r in rows if r['grade'] == grade]
@@ -180,7 +188,7 @@ def load_races(database):
         # Same acceptance as compare(): only final results published after the start; a non-finisher has no place.
         got = {h: r for h, r in results.get(rid, {}).items() if r.get('final') and datetime.fromisoformat(r['available_at']) > start}
         top = p.get('trifecta_top10') or []
-        races.append(dict(race_id=rid, prediction_id=p['id'], grade='A' if p['mode'] == 'live' else 'C', start_at=p['race']['start_at'], as_of=p['as_of'],
+        races.append(dict(race_id=rid, prediction_id=p['id'], grade='U' if p['mode'] == 'live' else 'C', start_at=p['race']['start_at'], as_of=p['as_of'],
                           horses=p['horses'], trifecta_top=top[0]['horses'] if top else [],
                           finish={h: r.get('finish') if r.get('status') == 'finished' else None for h, r in got.items()}, status={h: r.get('status') for h, r in got.items()}))
     return races
